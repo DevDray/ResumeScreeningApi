@@ -7,5 +7,6 @@
         public string? CandidateEmail { get; set; }
         public string? CandidatePhoneNumber { get; set; }
         public List<string> Experiences { get; set; } = new List<string>();
+        public List<string> ExperienceRanges { get; set; } = new List<string>();
     }
 }

@@ -46,6 +46,8 @@ namespace ResumeScreeningBusiness.Services
                             if (entity.SubCategory == "Duration")
                                 resumeEntitiesResponse.Experiences.Add(entity.Text);
                             break;
+                            else if (entity.SubCategory == "DateRange")
+                                resumeEntitiesResponse.ExperienceRanges.Add(entity.Text);
                         default:
                             break;
                     }
