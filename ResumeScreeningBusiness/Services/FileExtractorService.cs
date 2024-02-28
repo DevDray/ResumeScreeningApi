@@ -5,6 +5,7 @@ using iText.Kernel.Pdf.Canvas.Parser;
 using Microsoft.AspNetCore.Http;
 using ResumeScreeningBusiness.Interfaces;
 using ResumeScreeningBusiness.Models;
+using System.Collections.Generic;
 
 namespace ResumeScreeningBusiness.Services
 {
@@ -14,29 +15,35 @@ namespace ResumeScreeningBusiness.Services
         {
 
         }
-        public async Task<string> ExtractText(FileUploadModel model)
-        {
 
+        public async Task<List<ResumeEntitiesResponse>> ExtractTextAndGetResumeEntities(FileUploadModel model)
+        {
             string text = "";
+            List<ResumeEntitiesResponse> listOfResumeEntitiesResponse = new List<ResumeEntitiesResponse>();
 
             if (model.File.ContentType == "application/pdf")
             {
-                text = ExtractTextFromPdf(model.File);
+                await ExtractTextFromPdf(model, listOfResumeEntitiesResponse);
             }
             else if (model.File.ContentType == "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
             {
-                text = await ExtractTextFromDocx(model.File);
+                text = await ExtractTextFromDocx(model, listOfResumeEntitiesResponse);
             }
 
-            return text;
-
+            
+            return listOfResumeEntitiesResponse;
         }
 
-        private string ExtractTextFromPdf(IFormFile file)
+        private Task<string> ExtractTextFromDocx(FileUploadModel model, List<ResumeEntitiesResponse> listOfResumeEntitiesResponse)
+        {
+            throw new NotImplementedException();
+        }
+
+        private static async Task ExtractTextFromPdf(FileUploadModel model, List<ResumeEntitiesResponse> listOfResumeEntitiesResponse)
         {
             using (MemoryStream memoryStream = new MemoryStream())
             {
-                file.CopyTo(memoryStream);
+                model.File.CopyTo(memoryStream);
                 memoryStream.Position = 0;
 
                 using (PdfReader reader = new PdfReader(memoryStream))
@@ -47,26 +54,19 @@ namespace ResumeScreeningBusiness.Services
 
                         for (int i = 1; i <= pdfDoc.GetNumberOfPages(); i++)
                         {
-                            textWriter.WriteLine(PdfTextExtractor.GetTextFromPage(pdfDoc.GetPage(i)));
+                            ResumeEntitiesResponse resumeEntitiesResponse = await GetResumeEntities(PdfTextExtractor.GetTextFromPage(pdfDoc.GetPage(i)));
+                            listOfResumeEntitiesResponse.Add(resumeEntitiesResponse);
                         }
-
-                        return textWriter.ToString();
                     }
                 }
             }
         }
 
-        private async Task<string> ExtractTextFromDocx(IFormFile file)
-        {
-            // Your implementation for extracting text from DOCX files using Open XML SDK
-            return null;
-        }
-
-        public async Task<ResumeEntitiesResponse> ExtractTextAndGetResumeEntities(string document)
+        private static async Task<ResumeEntitiesResponse> GetResumeEntities(string document)
         {
             ResumeEntitiesResponse resumeEntitiesResponse = new ResumeEntitiesResponse();
-            var endpoint = "https://myfirstlanguageservice5.cognitiveservices.azure.com/";
-            var apiKey = "b2b75dcd292a4e6898b9c01815e78022";
+            var endpoint = "https://myfirstlanguageservice6.cognitiveservices.azure.com/";
+            var apiKey = "ef13359bb5e54d8f958d18168d0bafe4";
 
             var client = new TextAnalyticsClient(new Uri(endpoint), new AzureKeyCredential(apiKey));
             string preprocessedText = document;
@@ -112,6 +112,7 @@ namespace ResumeScreeningBusiness.Services
             {
                 Console.WriteLine($"Error: {ex.Message}");
             }
+
             return resumeEntitiesResponse;
         }
     }

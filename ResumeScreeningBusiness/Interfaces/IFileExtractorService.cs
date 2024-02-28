@@ -9,7 +9,6 @@ namespace ResumeScreeningBusiness.Interfaces
 {
     public interface IFileExtractorService
     {
-        Task<string> ExtractText(FileUploadModel model);
-        Task<ResumeEntitiesResponse> ExtractTextAndGetResumeEntities(string document);
+        Task<List<ResumeEntitiesResponse>> ExtractTextAndGetResumeEntities(FileUploadModel document);
     }
 }
