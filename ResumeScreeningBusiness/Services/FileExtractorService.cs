@@ -94,10 +94,8 @@ namespace ResumeScreeningBusiness.Services
                             resumeEntitiesResponse.CandidatePhoneNumber = entity.Text;
                             break;
                         case "Skill":
-                            resumeEntitiesResponse.DevelopmentSkills.Add(entity.Text);
-                            break;
                         case "Product":
-                            resumeEntitiesResponse.CloudSkills.Add(entity.Text);
+                            resumeEntitiesResponse.Skills.Add(entity.Text);
                             break;
                         case "DateTime":
                             if (entity.SubCategory == "Duration")

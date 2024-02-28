@@ -10,8 +10,8 @@ namespace ResumeScreeningBusiness.Services
         public async Task<ResumeEntitiesResponse> GetResumeEntities(string document)
         {
             ResumeEntitiesResponse resumeEntitiesResponse = new ResumeEntitiesResponse();
-            var endpoint = "https://myfirstlanguageservice4.cognitiveservices.azure.com/";
-            var apiKey = "b18870bf07ab4d62a8879afd2146d0bf";
+            var endpoint = "https://myfirstlanguageservice6.cognitiveservices.azure.com/";
+            var apiKey = "ef13359bb5e54d8f958d18168d0bafe4";
 
             var client = new TextAnalyticsClient(new Uri(endpoint), new AzureKeyCredential(apiKey));
             string preprocessedText = document;
@@ -39,10 +39,8 @@ namespace ResumeScreeningBusiness.Services
                             resumeEntitiesResponse.CandidatePhoneNumber = entity.Text;
                             break;
                         case "Skill":
-                            resumeEntitiesResponse.DevelopmentSkills.Add(entity.Text);
-                            break;
                         case "Product":
-                            resumeEntitiesResponse.CloudSkills.Add(entity.Text);
+                            resumeEntitiesResponse.Skills.Add(entity.Text);
                             break;
                         case "DateTime":
                             if (entity.SubCategory == "Duration")
