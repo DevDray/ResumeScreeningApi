@@ -2,36 +2,74 @@
 using Azure;
 using iText.Kernel.Pdf;
 using iText.Kernel.Pdf.Canvas.Parser;
-using Microsoft.AspNetCore.Http;
 using ResumeScreeningBusiness.Interfaces;
 using ResumeScreeningBusiness.Models;
-using System.Collections.Generic;
+using Microsoft.Extensions.Configuration;
+using Azure.Storage.Blobs;
+using Azure.Storage.Blobs.Models;
+using Microsoft.WindowsAzure.Storage;
+using Microsoft.WindowsAzure.Storage.Blob;
 
 namespace ResumeScreeningBusiness.Services
 {
     public class FileExtractorService : IFileExtractorService
     {
-        public FileExtractorService()
+        private readonly string _connectionString;
+        public FileExtractorService(IConfiguration configuration)
         {
-
+            //_connectionString = configuration.GetConnectionString("AzureBlobStorageConnectionString");
+            _connectionString = "DefaultEndpointsProtocol=https;AccountName=myaistorageaccount125;AccountKey=DpUWPDpAilrNkGTux1cNJ7nu2XTKYueiPrA3g3SeYuypuA4YtYTfr/93m8QrMfH+55ibZj4QHqSm+AStaIVvkw==;EndpointSuffix=core.windows.net";
         }
 
-        public async Task<List<ResumeEntitiesResponse>> ExtractTextAndGetResumeEntities(FileUploadModel model)
+        public async Task<FileUploadAndNLPResponse> ExtractTextAndGetResumeEntities(FileUploadModel model)
         {
-            string text = "";
+            FileUploadAndNLPResponse fileUploadAndNLPResponse = new FileUploadAndNLPResponse();
             List<ResumeEntitiesResponse> listOfResumeEntitiesResponse = new List<ResumeEntitiesResponse>();
-
-            if (model.File.ContentType == "application/pdf")
+            try
             {
-                await ExtractTextFromPdf(model, listOfResumeEntitiesResponse);
+                if (model.File?.ContentType == "application/pdf")
+                {
+                    await ExtractTextFromPdf(model, listOfResumeEntitiesResponse);
+                    if (listOfResumeEntitiesResponse != null && !string.IsNullOrEmpty(listOfResumeEntitiesResponse[0]?.CandidatePhoneNumber))
+                    {
+                        await UploadResume(model, fileUploadAndNLPResponse, listOfResumeEntitiesResponse, "pdf");
+                    }
+                }
+                else if (model.File?.ContentType == "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+                {
+                    string text = await ExtractTextFromDocx(model, listOfResumeEntitiesResponse);
+                }
             }
-            else if (model.File.ContentType == "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+            catch (Exception ex)
             {
-                text = await ExtractTextFromDocx(model, listOfResumeEntitiesResponse);
+                Console.WriteLine($"Error: {ex.Message}");
             }
 
             
-            return listOfResumeEntitiesResponse;
+            return fileUploadAndNLPResponse;
+        }
+
+        private async Task UploadResume(FileUploadModel model, FileUploadAndNLPResponse fileUploadAndNLPResponse, List<ResumeEntitiesResponse> listOfResumeEntitiesResponse, string fileType)
+        {
+            // Create a BlobServiceClient object which will be used to create a container client
+            BlobServiceClient blobServiceClient = new BlobServiceClient(_connectionString);
+
+            // Create the container and return a container client object
+            BlobContainerClient containerClient = blobServiceClient.GetBlobContainerClient("aiblob");
+            string? fileName = !string.IsNullOrEmpty(listOfResumeEntitiesResponse[0]?.CandidateName) ? listOfResumeEntitiesResponse[0].CandidateName : "No Candidate Name";
+            string filePath = listOfResumeEntitiesResponse[0].CandidatePhoneNumber + "/" + fileName + "." + fileType;
+            // Get a reference to a blob
+            BlobClient blobClient = containerClient.GetBlobClient(filePath);
+
+            // Upload file to blob storage
+            using (MemoryStream memoryStream = new MemoryStream())
+            {
+                model.File.CopyTo(memoryStream);
+                memoryStream.Position = 0;
+                await blobClient.UploadAsync(memoryStream, true);
+                fileUploadAndNLPResponse.filePath = filePath;
+                fileUploadAndNLPResponse.listOfResumeEntitiesResponse = listOfResumeEntitiesResponse;
+            }
         }
 
         private Task<string> ExtractTextFromDocx(FileUploadModel model, List<ResumeEntitiesResponse> listOfResumeEntitiesResponse)
@@ -65,8 +103,8 @@ namespace ResumeScreeningBusiness.Services
         private static async Task<ResumeEntitiesResponse> GetResumeEntities(string document)
         {
             ResumeEntitiesResponse resumeEntitiesResponse = new ResumeEntitiesResponse();
-            var endpoint = "https://myfirstlanguageservice6.cognitiveservices.azure.com/";
-            var apiKey = "ef13359bb5e54d8f958d18168d0bafe4";
+            var endpoint = "https://myfirstlanguageservice7.cognitiveservices.azure.com/";
+            var apiKey = "1ef4a248c2ea42df8be205294d84a80a";
 
             var client = new TextAnalyticsClient(new Uri(endpoint), new AzureKeyCredential(apiKey));
             string preprocessedText = document;
@@ -114,6 +152,29 @@ namespace ResumeScreeningBusiness.Services
             }
 
             return resumeEntitiesResponse;
+        }
+
+        public async Task<CloudBlockBlob> DownloadResume(string fileName)
+        {
+            try
+            {
+                CloudBlockBlob blockBlob;
+                await using (MemoryStream memoryStream = new MemoryStream())
+                {
+                    CloudStorageAccount cloudStorageAccount = CloudStorageAccount.Parse(_connectionString);
+                    CloudBlobClient cloudBlobClient = cloudStorageAccount.CreateCloudBlobClient();
+                    CloudBlobContainer cloudBlobContainer = cloudBlobClient.GetContainerReference("aiblob");
+                    blockBlob = cloudBlobContainer.GetBlockBlobReference(fileName);
+                    await blockBlob.DownloadToStreamAsync(memoryStream);
+                }
+                return blockBlob;
+
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error: {ex.Message}");
+            }
+            return null;
         }
     }
 }

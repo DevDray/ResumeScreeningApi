@@ -9,6 +9,6 @@ namespace ResumeScreeningBusiness.Models
 {
     public class FileUploadModel
     {
-        public IFormFile File { get; set; }
+        public IFormFile? File { get; set; }
     }
 }
