@@ -18,7 +18,7 @@ namespace ResumeScreeningBusiness.Services
         public FileExtractorService(IConfiguration configuration)
         {
             //_connectionString = configuration.GetConnectionString("AzureBlobStorageConnectionString");
-            _connectionString = "DefaultEndpointsProtocol=https;AccountName=myaistorageaccount125;AccountKey=DpUWPDpAilrNkGTux1cNJ7nu2XTKYueiPrA3g3SeYuypuA4YtYTfr/93m8QrMfH+55ibZj4QHqSm+AStaIVvkw==;EndpointSuffix=core.windows.net";
+            _connectionString = "DefaultEndpointsProtocol=https;AccountName=myaistorageaccount126;AccountKey=/yBYxMvg1SFWISRCP0dd9r0YMxijJcc9iGvpCOW5XW0wk3BsP4eK5EPmjmTA/3qr6jBl6ZetlQGI+AStAdeFbw==;EndpointSuffix=core.windows.net";
         }
 
         public async Task<FileUploadAndNLPResponse> ExtractTextAndGetResumeEntities(FileUploadModel model)
@@ -103,8 +103,8 @@ namespace ResumeScreeningBusiness.Services
         private static async Task<ResumeEntitiesResponse> GetResumeEntities(string document)
         {
             ResumeEntitiesResponse resumeEntitiesResponse = new ResumeEntitiesResponse();
-            var endpoint = "https://myfirstlanguageservice7.cognitiveservices.azure.com/";
-            var apiKey = "1ef4a248c2ea42df8be205294d84a80a";
+            var endpoint = "https://myfirstlangservice1.cognitiveservices.azure.com/";
+            var apiKey = "2b5c4439bdb24cdb8fd15cb317fea5c3";
 
             var client = new TextAnalyticsClient(new Uri(endpoint), new AzureKeyCredential(apiKey));
             string preprocessedText = document;
