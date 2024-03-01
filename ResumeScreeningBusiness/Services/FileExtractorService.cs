@@ -6,7 +6,6 @@ using ResumeScreeningBusiness.Interfaces;
 using ResumeScreeningBusiness.Models;
 using Microsoft.Extensions.Configuration;
 using Azure.Storage.Blobs;
-using Azure.Storage.Blobs.Models;
 using Microsoft.WindowsAzure.Storage;
 using Microsoft.WindowsAzure.Storage.Blob;
 
@@ -30,6 +29,7 @@ namespace ResumeScreeningBusiness.Services
                 if (model.File?.ContentType == "application/pdf")
                 {
                     await ExtractTextFromPdf(model, listOfResumeEntitiesResponse);
+                    fileUploadAndNLPResponse.listOfResumeEntitiesResponse = listOfResumeEntitiesResponse;
                     if (listOfResumeEntitiesResponse != null && !string.IsNullOrEmpty(listOfResumeEntitiesResponse[0]?.CandidatePhoneNumber))
                     {
                         await UploadResume(model, fileUploadAndNLPResponse, listOfResumeEntitiesResponse, "pdf");
@@ -45,7 +45,7 @@ namespace ResumeScreeningBusiness.Services
                 Console.WriteLine($"Error: {ex.Message}");
             }
 
-            
+
             return fileUploadAndNLPResponse;
         }
 
@@ -64,11 +64,10 @@ namespace ResumeScreeningBusiness.Services
             // Upload file to blob storage
             using (MemoryStream memoryStream = new MemoryStream())
             {
-                model.File.CopyTo(memoryStream);
+                model?.File?.CopyTo(memoryStream);
                 memoryStream.Position = 0;
                 await blobClient.UploadAsync(memoryStream, true);
                 fileUploadAndNLPResponse.filePath = filePath;
-                fileUploadAndNLPResponse.listOfResumeEntitiesResponse = listOfResumeEntitiesResponse;
             }
         }
 
@@ -89,10 +88,30 @@ namespace ResumeScreeningBusiness.Services
                     using (PdfDocument pdfDoc = new PdfDocument(reader))
                     {
                         StringWriter textWriter = new StringWriter();
-
+                        int score = 0;
+                        if (pdfDoc.GetNumberOfPages() > 3)
+                        {
+                            score += 20;
+                        }
+                        bool isExperienceIncluded = false;
+                        bool isNameEmailPhoneNumberIncluded = false;
+                        bool isPersonTypeIncluded = false;
+                        bool isOrganizationIncluded = false;
+                        bool isLocationIncluded = false;
                         for (int i = 1; i <= pdfDoc.GetNumberOfPages(); i++)
                         {
-                            ResumeEntitiesResponse resumeEntitiesResponse = await GetResumeEntities(PdfTextExtractor.GetTextFromPage(pdfDoc.GetPage(i)));
+                            ResumeEntitiesResponse resumeEntitiesResponse = await GetResumeEntities(PdfTextExtractor.GetTextFromPage(pdfDoc.GetPage(i)), isPersonTypeIncluded, isOrganizationIncluded, isLocationIncluded);
+                            if ((resumeEntitiesResponse.ExperienceRanges.Count > 0 || resumeEntitiesResponse.Experiences.Count > 0) && !isExperienceIncluded)
+                            {
+                                score += 20;
+                                isExperienceIncluded = true;
+                            }
+                            if (!string.IsNullOrEmpty(resumeEntitiesResponse.CandidateName) && !string.IsNullOrEmpty(resumeEntitiesResponse.CandidatePhoneNumber) && !string.IsNullOrEmpty(resumeEntitiesResponse.CandidateEmail) && !isNameEmailPhoneNumberIncluded)
+                            {
+                                score += 20;
+                                isNameEmailPhoneNumberIncluded = true;
+                            }
+                            resumeEntitiesResponse.ResumeScore += score;
                             listOfResumeEntitiesResponse.Add(resumeEntitiesResponse);
                         }
                     }
@@ -100,7 +119,7 @@ namespace ResumeScreeningBusiness.Services
             }
         }
 
-        private static async Task<ResumeEntitiesResponse> GetResumeEntities(string document)
+        private static async Task<ResumeEntitiesResponse> GetResumeEntities(string document, bool isPersonTypeIncluded, bool isOrganizationIncluded, bool isLocationIncluded)
         {
             ResumeEntitiesResponse resumeEntitiesResponse = new ResumeEntitiesResponse();
             var endpoint = "https://myfirstlangservice1.cognitiveservices.azure.com/";
@@ -111,7 +130,6 @@ namespace ResumeScreeningBusiness.Services
             try
             {
                 Response<CategorizedEntityCollection> result = await client.RecognizeEntitiesAsync(preprocessedText, language: "en");
-
                 // Post-process entities: Map back to original custom entities
                 foreach (var entity in result.Value)
                 {
@@ -119,11 +137,32 @@ namespace ResumeScreeningBusiness.Services
 
                     Console.WriteLine($"\t\tEntity: {originalEntityText}\tType: {entity.Category}\tSubcategory: {entity.SubCategory}");
                     Console.WriteLine($"\t\tScore: {entity.ConfidenceScore:F2}\tLength: {entity.Length}\tOffset: {entity.Offset}\n");
-
+                   
                     switch (entity.Category.ToString())
                     {
                         case "Person":
                             resumeEntitiesResponse.CandidateName = entity.Text;
+                            break;
+                        case "PersonType":
+                            if ((entity.Text.Contains("Certified") || entity.Text.Contains("certified")) && !isPersonTypeIncluded)
+                            {
+                                resumeEntitiesResponse.ResumeScore += 20;
+                                isPersonTypeIncluded = true;
+                            }
+                            break;
+                        case "Organization":
+                            if (!isOrganizationIncluded)
+                            {
+                                resumeEntitiesResponse.ResumeScore += 10;
+                                isOrganizationIncluded = true;
+                            }
+                            break;
+                        case "Location":
+                            if (!isLocationIncluded)
+                            {
+                                resumeEntitiesResponse.ResumeScore += 10;
+                                isLocationIncluded = true;
+                            }
                             break;
                         case "Email":
                             resumeEntitiesResponse.CandidateEmail = entity.Text;
@@ -138,7 +177,7 @@ namespace ResumeScreeningBusiness.Services
                         case "DateTime":
                             if (entity.SubCategory == "Duration")
                                 resumeEntitiesResponse.Experiences.Add(entity.Text);
-                            else if(entity.SubCategory == "DateRange")
+                            else if (entity.SubCategory == "DateRange")
                                 resumeEntitiesResponse.ExperienceRanges.Add(entity.Text);
                             break;
                         default:
