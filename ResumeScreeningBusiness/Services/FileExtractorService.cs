@@ -4,10 +4,10 @@ using iText.Kernel.Pdf;
 using iText.Kernel.Pdf.Canvas.Parser;
 using ResumeScreeningBusiness.Interfaces;
 using ResumeScreeningBusiness.Models;
-using Microsoft.Extensions.Configuration;
 using Azure.Storage.Blobs;
 using Microsoft.WindowsAzure.Storage;
 using Microsoft.WindowsAzure.Storage.Blob;
+using Microsoft.Extensions.Configuration;
 
 namespace ResumeScreeningBusiness.Services
 {
@@ -16,8 +16,8 @@ namespace ResumeScreeningBusiness.Services
         private readonly string _connectionString;
         public FileExtractorService(IConfiguration configuration)
         {
-            //_connectionString = configuration.GetConnectionString("AzureBlobStorageConnectionString");
-            _connectionString = "DefaultEndpointsProtocol=https;AccountName=myaistorageaccount126;AccountKey=/yBYxMvg1SFWISRCP0dd9r0YMxijJcc9iGvpCOW5XW0wk3BsP4eK5EPmjmTA/3qr6jBl6ZetlQGI+AStAdeFbw==;EndpointSuffix=core.windows.net";
+            _connectionString = configuration.GetConnectionString("AzureBlobStorageConnectionString");
+            //_connectionString = "DefaultEndpointsProtocol=https;AccountName=myaistorageaccount126;AccountKey=/yBYxMvg1SFWISRCP0dd9r0YMxijJcc9iGvpCOW5XW0wk3BsP4eK5EPmjmTA/3qr6jBl6ZetlQGI+AStAdeFbw==;EndpointSuffix=core.windows.net";
         }
 
         public async Task<FileUploadAndNLPResponse> ExtractTextAndGetResumeEntities(FileUploadModel model)
@@ -29,10 +29,19 @@ namespace ResumeScreeningBusiness.Services
                 if (model.File?.ContentType == "application/pdf")
                 {
                     await ExtractTextFromPdf(model, listOfResumeEntitiesResponse);
-                    fileUploadAndNLPResponse.listOfResumeEntitiesResponse = listOfResumeEntitiesResponse;
+                    if (listOfResumeEntitiesResponse != null && listOfResumeEntitiesResponse[0] != null)
+                    {
+                        fileUploadAndNLPResponse.Skills = listOfResumeEntitiesResponse[0].Skills;
+                        fileUploadAndNLPResponse.CandidateName = listOfResumeEntitiesResponse[0].CandidateName;
+                        fileUploadAndNLPResponse.CandidatePhoneNumber = listOfResumeEntitiesResponse[0].CandidatePhoneNumber;
+                        fileUploadAndNLPResponse.CandidateEmail = listOfResumeEntitiesResponse[0].CandidateEmail;
+                        fileUploadAndNLPResponse.Experiences = listOfResumeEntitiesResponse[0].Experiences?.Count > 0 ? listOfResumeEntitiesResponse[0].Experiences[0] : null;
+                        fileUploadAndNLPResponse.ExperienceRanges = listOfResumeEntitiesResponse[0].ExperienceRanges;
+                        fileUploadAndNLPResponse.ResumeScore = listOfResumeEntitiesResponse[0].ResumeScore;
+                    }
                     if (listOfResumeEntitiesResponse != null && !string.IsNullOrEmpty(listOfResumeEntitiesResponse[0]?.CandidatePhoneNumber))
                     {
-                        await UploadResume(model, fileUploadAndNLPResponse, listOfResumeEntitiesResponse, "pdf");
+                        //await UploadResume(model, fileUploadAndNLPResponse, listOfResumeEntitiesResponse, "pdf");
                     }
                 }
                 else if (model.File?.ContentType == "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
@@ -67,7 +76,7 @@ namespace ResumeScreeningBusiness.Services
                 model?.File?.CopyTo(memoryStream);
                 memoryStream.Position = 0;
                 await blobClient.UploadAsync(memoryStream, true);
-                fileUploadAndNLPResponse.filePath = filePath;
+                fileUploadAndNLPResponse.FilePath = filePath;
             }
         }
 
@@ -101,6 +110,7 @@ namespace ResumeScreeningBusiness.Services
                         for (int i = 1; i <= pdfDoc.GetNumberOfPages(); i++)
                         {
                             ResumeEntitiesResponse resumeEntitiesResponse = await GetResumeEntities(PdfTextExtractor.GetTextFromPage(pdfDoc.GetPage(i)), isPersonTypeIncluded, isOrganizationIncluded, isLocationIncluded);
+
                             if ((resumeEntitiesResponse.ExperienceRanges.Count > 0 || resumeEntitiesResponse.Experiences.Count > 0) && !isExperienceIncluded)
                             {
                                 score += 20;
@@ -112,7 +122,38 @@ namespace ResumeScreeningBusiness.Services
                                 isNameEmailPhoneNumberIncluded = true;
                             }
                             resumeEntitiesResponse.ResumeScore += score;
-                            listOfResumeEntitiesResponse.Add(resumeEntitiesResponse);
+                            
+                            if (listOfResumeEntitiesResponse.Count() == 0)
+                            {
+                                listOfResumeEntitiesResponse.Add(resumeEntitiesResponse);
+                                listOfResumeEntitiesResponse[0].ResumeScore = resumeEntitiesResponse.ResumeScore;
+                            }
+                            else
+                            {
+                                foreach (string skill in resumeEntitiesResponse.Skills)
+                                {
+                                    if (!skill.Equals(listOfResumeEntitiesResponse[0].Skills.Any()))
+                                    {
+                                        listOfResumeEntitiesResponse[0].Skills.Add(skill);
+                                    }
+                                }
+                                foreach (string experience in resumeEntitiesResponse.Experiences)
+                                {
+                                    if (!experience.Equals(listOfResumeEntitiesResponse[0].Experiences.Any()))
+                                    {
+                                        listOfResumeEntitiesResponse[0].Experiences.Add(experience);
+                                    }
+                                }
+
+                                foreach (string experienceRange in resumeEntitiesResponse.ExperienceRanges)
+                                {
+                                    if (!experienceRange.Equals(listOfResumeEntitiesResponse[0].ExperienceRanges.Any()))
+                                    {
+                                        listOfResumeEntitiesResponse[0].ExperienceRanges.Add(experienceRange);
+                                    }
+                                }
+                                listOfResumeEntitiesResponse[0].ResumeScore = resumeEntitiesResponse.ResumeScore;
+                            }
                         }
                     }
                 }
@@ -137,7 +178,7 @@ namespace ResumeScreeningBusiness.Services
 
                     Console.WriteLine($"\t\tEntity: {originalEntityText}\tType: {entity.Category}\tSubcategory: {entity.SubCategory}");
                     Console.WriteLine($"\t\tScore: {entity.ConfidenceScore:F2}\tLength: {entity.Length}\tOffset: {entity.Offset}\n");
-                   
+
                     switch (entity.Category.ToString())
                     {
                         case "Person":

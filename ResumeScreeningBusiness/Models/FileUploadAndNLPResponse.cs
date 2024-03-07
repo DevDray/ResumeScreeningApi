@@ -8,7 +8,13 @@ namespace ResumeScreeningBusiness.Models
 {
     public class FileUploadAndNLPResponse
     {
-        public string filePath { get; set; }
-        public List<ResumeEntitiesResponse> listOfResumeEntitiesResponse { get; set; }
+        public string? FilePath { get; set; }
+        public List<string>? Skills { get; set; }
+        public string? CandidateName { get; set; }
+        public string? CandidateEmail { get; set; }
+        public string? CandidatePhoneNumber { get; set; }
+        public int ResumeScore { get; set; }
+        public string? Experiences { get; set; }
+        public List<string>? ExperienceRanges { get; set; }
     }
 }
